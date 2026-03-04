@@ -10133,5 +10133,26 @@ def del_vnet_route(ctx, vnet_name, prefix):
         click.echo("All routes deleted for the VNET {}.".format(vnet_name))
 
 
+@config.group(cls=clicommon.AbbreviationGroup, name='error-monitor')
+def error_monitor():
+    """Configure TX error monitor settings"""
+    pass
+
+@error_monitor.command('threshold')
+@click.argument('threshold', type=click.IntRange(min=1))
+@clicommon.pass_db
+def error_monitor_threshold(db, threshold):
+    """Set TX error threshold"""
+    db.cfgdb.mod_entry('TX_ERR_CFG', 'GLOBAL', {'threshold': str(threshold)})
+    click.echo("Threshold updated")
+
+@error_monitor.command('polling-interval')
+@click.argument('interval', type=click.IntRange(min=1))
+@clicommon.pass_db
+def error_monitor_polling_interval(db, interval):
+    """Set TX error polling interval in seconds"""
+    db.cfgdb.mod_entry('TX_ERR_CFG', 'GLOBAL', {'polling_interval': str(interval)})
+    click.echo("Polling interval updated")
+
 if __name__ == '__main__':
     config()

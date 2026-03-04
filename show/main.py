@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import re
+from typing import Required
 
 import click
 import lazy_object_proxy
@@ -2913,6 +2914,72 @@ def show_fast_linkup_global(db, json_output):
     rows = [[k, v] for k, v in data.items()]
     click.echo(tabulate(rows, headers=['Field', 'Value'], tablefmt='grid'))
 
+@cli.group('error-monitor')
+def error_monitor():
+    """Show TX error monitor information"""
+    pass
+
+def invalid_interface(state_db, iface):
+    if iface is None:
+        return False
+    return not state_db.exists(state_db.STATE_DB, f'TX_ERR_STATUS|{iface}')
+
+@error_monitor.command('status')
+@click.argument('interfacename', required=False)
+def error_monitor_status(interfacename):
+    """Show TX error monitor status for ports"""
+    TX_ERROR_TABLE_KEY = "TX_ERR_STATUS"
+
+    state_db = SonicV2Connector(host='127.0.0.1')
+    state_db.connect(state_db.STATE_DB)
+
+    header = ['Interface', 'Status', 'TX Errors (last cycle)', 'Total TX Errors']
+    body = []
+
+    if invalid_interface(state_db, interfacename):
+        click.echo(f"Invalid Interface {interfacename}")
+        state_db.close(state_db.STATE_DB)
+        return
+
+    if interfacename:
+        table_keys = [f"{TX_ERROR_TABLE_KEY}|{interfacename}"]
+    else:
+        table_keys = state_db.table_keys(state_db.STATE_DB, f'{TX_ERROR_TABLE_KEY}|*') or []
+
+    for key in natsorted(table_keys):
+        iface = key.split('|', 1)[1]
+        data = state_db.get_all(state_db.STATE_DB, key)
+        if data:
+            body.append([
+                iface,
+                data.get('status', 'N/A'),
+                data.get('tx_err_count', '0'),
+                data.get('total_tx_err_count', '0'),
+            ])
+
+    click.echo(tabulate(body, header))
+    state_db.close(state_db.STATE_DB)
+
+@error_monitor.command('config')
+def error_monitor_config():
+    """Show TX error monitor configuration"""
+    TABLE =                "TX_ERR_CFG"
+    ENTRY =                "GLOBAL"
+    THRESHOLD_KEY =        "threshold"
+    POLLING_INTERVAL_KEY = "polling_interval"
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+
+    data = config_db.get_entry(TABLE, ENTRY)
+
+    if data:
+        message = (f"Threshold: {data.get(THRESHOLD_KEY)}\n"
+                   f"Poll Time: {data.get(POLLING_INTERVAL_KEY)}")
+    else:
+        message = "No configurations yet"
+
+    click.echo(message)
 
 # Load plugins and register them
 helper = util_base.UtilHelper()
